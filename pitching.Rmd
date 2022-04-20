@@ -1,0 +1,68 @@
+---
+title: "Pitcher Data"
+author: "Danny Kim"
+date: "6/25/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# This project uses machine learning to predict pitcher WAR (Wins Above Replacement)
+
+```{r}
+# load data
+pitcherData <- read.csv('pitching.csv', fileEncoding = "UTF-8-BOM")
+```
+
+### Conduct a correlation analysis to find the variables with the greatest correlation with WAR  
+```{r}
+cor(subset(pitcherData, select=-c(Season,Name,Team,playerid)))
+```
+
+### From the WAR column, the best variables are wins, losses, innings pitched, earned runs, home runs allowed, strikeouts, and WAR (correlation coefficient greater than .25 or less than -.25)
+
+```{r}
+variables <- c('W','L','IP','ER','HR','BB','SO','WAR')
+library(caret)
+# select 70 percent of data
+inTrain <- createDataPartition(pitcherData$WAR,p=0.7,list=FALSE)
+# create train and test sets
+training <- pitcherData[inTrain, variables]
+testing <- pitcherData[-inTrain, variables]
+```
+
+
+### After creating the train and test sets, we want to model WAR adjusting for these variables using linear regression with cross-validation.
+
+```{r}
+# cross validation
+method = 'lm'
+ctrl <- trainControl(method = 'repeatedcv',number = 10, repeats = 10)
+
+# fit the model
+modelFit <- train(WAR ~ ., method=method, data=training, trControl=ctrl)
+summary(modelFit)
+```
+
+### The adjusted R-squared for this model is .8675, and there may be room for improvement. We saw that IP, HR, BB, and SO were the most significant variables contributing to WAR, so we will fit another model with these 4 variables to see if there is any improvement in our model.
+
+```{r}
+model2 <- train(WAR ~ L + IP + HR + BB + SO, method=method, data=training, trControl=ctrl)
+summary(model2)
+```
+
+### The R-squared value of both models is similar. Since the second model adjusts for less variables but fits the data just as well, we will continue with our second model. Lastly, we need to apply our model to the test see if it is good. 
+
+```{r}
+# Apply to test set
+predicted <- predict(model2,newdata=testing)
+# R-squared
+cor(testing$WAR,predicted)^2
+# Plot the predicted values vs. actuals
+plot(testing$WAR,predicted)
+```
+
+### Correlation coefficient is high, and seems to fit the test set very well.
+
+# Final model to predict pitcher WAR
+WAR = $0.2191834 - 0.0245542(L) + 0.0161916(IP) - 0.111120(HR) - 0.0344068(BB) + 0.0252364(SO)$
